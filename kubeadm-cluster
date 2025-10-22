@@ -1,0 +1,152 @@
+🧠 MASTER NODE SETUP SCRIPT
+------------------------------------------
+Save this as master-setup.sh and run:
+sudo bash master-setup.sh
+
+#!/bin/bash
+# Kubernetes Master Node Setup Script
+# Tested on Ubuntu 20.04/22.04
+
+echo "=== Step 1: Disabling Swap ==="
+swapoff -a
+sed -i '/ swap / s/^/#/' /etc/fstab
+
+echo "=== Step 2: Installing Dependencies ==="
+apt update -y
+apt install -y apt-transport-https ca-certificates curl containerd
+
+echo "=== Step 3: Configuring Containerd ==="
+mkdir -p /etc/containerd
+containerd config default | tee /etc/containerd/config.toml >/dev/null
+sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+systemctl restart containerd
+systemctl enable containerd
+
+echo "=== Step 4: Enabling Kernel Modules ==="
+cat <<EOF | tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+modprobe overlay
+modprobe br_netfilter
+
+cat <<EOF | tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.ipv4.ip_forward                 = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+sysctl --system
+
+echo "=== Step 5: Installing kubeadm, kubelet, and kubectl (fixed key) ==="
+
+# Remove any old repo
+rm -f /etc/apt/sources.list.d/kubernetes.list
+rm -f /usr/share/keyrings/kubernetes-archive-keyring.gpg
+
+# Add the new official Kubernetes apt repo (as of mid-2024)
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+# Install kubeadm, kubelet, kubectl
+sudo apt update -y
+sudo apt install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+
+echo "=== Step 6: Initializing Kubernetes Cluster ==="
+kubeadm init --pod-network-cidr=10.244.0.0/16 | tee kubeadm-init.log
+
+echo "=== Step 7: Setting up kubectl access ==="
+mkdir -p $HOME/.kube
+cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+chown $(id -u):$(id -g) $HOME/.kube/config
+
+echo "=== Step 8: Installing Flannel Network Plugin ==="
+kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+
+echo "=== Step 9: Printing join command for worker nodes ==="
+kubeadm token create --print-join-command
+
+⚙️ WORKER NODE SETUP SCRIPT
+--------------------------------------
+Save this as worker-setup.sh and run:
+sudo bash worker-setup.sh
+
+#!/bin/bash
+# Kubernetes Worker Node Setup Script
+# Tested on Ubuntu 20.04/22.04
+
+echo "=== Step 1: Disabling Swap ==="
+swapoff -a
+sed -i '/ swap / s/^/#/' /etc/fstab
+
+echo "=== Step 2: Installing Dependencies ==="
+apt update -y
+apt install -y apt-transport-https ca-certificates curl containerd
+
+echo "=== Step 3: Configuring Containerd ==="
+mkdir -p /etc/containerd
+containerd config default | tee /etc/containerd/config.toml >/dev/null
+sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+systemctl restart containerd
+systemctl enable containerd
+
+echo "=== Step 4: Enabling Kernel Modules ==="
+cat <<EOF | tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+modprobe overlay
+modprobe br_netfilter
+
+cat <<EOF | tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.ipv4.ip_forward                 = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+sysctl --system
+
+echo "=== Step 5: Installing kubeadm, kubelet, and kubectl (fixed key) ==="
+
+# Remove any old repo
+rm -f /etc/apt/sources.list.d/kubernetes.list
+rm -f /usr/share/keyrings/kubernetes-archive-keyring.gpg
+
+# Add the new official Kubernetes apt repo (as of mid-2024)
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+# Install kubeadm, kubelet, kubectl
+sudo apt update -y
+sudo apt install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+echo "=== Setup Complete! ==="
+echo "👉 Now run the join command provided by the master node to connect this worker."
+
+
+
+
+Example Join Command
+
+After running the master script, you’ll see something like this:
+
+kubeadm join 172.31.31.60:6443 --token fk4ofm.n9iy766pcp6diqba --discovery-token-ca-cert-hash sha256:38ccb14f19ab02e0a122c4c8e0ec2d6e685870b2ac606b9e1128f0b2869f2275
+
+
+
+
+
+
+
+
+
+
+
+
+
+
