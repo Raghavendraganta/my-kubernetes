@@ -1,5 +1,12 @@
 🧠 MASTER NODE SETUP SCRIPT
 ------------------------------------------
+sudo apt-get update
+sudo hostnamectl set-hostname master-node(master node)
+sudo hostnamectl set-hostname worker-node(in workernode)
+sudo -i
+
+sudo timedatectl set-timezone Asia/Kolkata(all node)
+
 Save this as master-setup.sh and run:
 sudo bash master-setup.sh
 
